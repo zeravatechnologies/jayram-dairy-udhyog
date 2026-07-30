@@ -1,14 +1,18 @@
 """Dashboard — today's summary and recent activity."""
 
+from decimal import Decimal
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QGridLayout, QGroupBox, QLabel, QVBoxLayout, QWidget
 
 from app.services.dashboard import (
     get_low_stock_products,
+    get_today_milk_by_session,
     get_today_milk_total,
     get_total_customer_due,
     get_total_vendor_payable,
 )
+from app.services.orders import list_upcoming_advance_orders
 from app.services.payments import list_recent_payments
 from app.ui.theme import AMBER, GREEN, GREEN_DARK, INK, set_role
 from app.utils.bs_date import to_bs_display, today_in_nepal
@@ -77,6 +81,16 @@ class DashboardScreen(QWidget):
         self._arrange_stat_cards(4)
         layout.addLayout(self.stats_grid)
 
+        upcoming_box = QGroupBox("Upcoming deliveries (advance orders)")
+        upcoming_layout = QVBoxLayout(upcoming_box)
+        self.upcoming_label = set_role(
+            QLabel("No advance deliveries in the next 30 days."),
+            "empty",
+        )
+        self.upcoming_label.setWordWrap(True)
+        upcoming_layout.addWidget(self.upcoming_label)
+        layout.addWidget(upcoming_box)
+
         recent_box = QGroupBox("Recent payments")
         recent_layout = QVBoxLayout(recent_box)
         self.recent_label = set_role(QLabel("No payments recorded yet."), "empty")
@@ -101,9 +115,12 @@ class DashboardScreen(QWidget):
     def refresh(self):
         today = today_in_nepal()
         self.date_label.setText(f"आजको मिति · {to_bs_display(today)}")
+        by_session = get_today_milk_by_session(self.session, today=today)
+        morning = by_session.get("morning", Decimal("0"))
+        evening = by_session.get("evening", Decimal("0"))
         self.milk_card.set_value(
             f"{get_today_milk_total(self.session, today=today)} L",
-            "collected so far today",
+            f"Morning {morning} L · Evening {evening} L",
         )
         self.vendor_card.set_value(f"रु {get_total_vendor_payable(self.session)}", "pending across vendors")
         self.customer_card.set_value(f"रु {get_total_customer_due(self.session)}", "pending across customers")
@@ -111,6 +128,26 @@ class DashboardScreen(QWidget):
         low_stock = get_low_stock_products(self.session)
         stock_note = ", ".join(product.name for product in low_stock) or "All stock is healthy"
         self.stock_card.set_value(str(len(low_stock)), stock_note)
+
+        upcoming = list_upcoming_advance_orders(self.session, within_days=30)
+        if not upcoming:
+            self.upcoming_label.setText("No advance deliveries in the next 30 days.")
+            set_role(self.upcoming_label, "empty")
+        else:
+            lines = []
+            for order in upcoming:
+                product_label = (
+                    f"{order.product.name} ({order.product.variant})"
+                    if order.product.variant
+                    else order.product.name
+                )
+                note = f" — {order.planning_note}" if order.planning_note else ""
+                lines.append(
+                    f"{to_bs_display(order.delivery_date)}  ·  {order.customer.name}  ·  "
+                    f"{product_label} × {order.quantity}{note}"
+                )
+            self.upcoming_label.setText("\n".join(lines))
+            set_role(self.upcoming_label, "muted")
 
         recent = list_recent_payments(self.session, limit=5)
         if not recent:

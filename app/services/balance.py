@@ -32,9 +32,13 @@ def get_vendor_balance(session, vendor_id: int, as_of_date=None) -> Decimal:
 
 
 def get_customer_balance(session, customer_id: int, as_of_date=None) -> Decimal:
-    """Return what this customer currently owes US (positive = they owe us)."""
+    """Return what this customer currently owes US (positive = they owe us).
+
+    Cancelled orders are excluded — they never became a receivable.
+    """
     txn_q = select(func.coalesce(func.sum(OrderTransaction.amount), 0)).where(
-        OrderTransaction.customer_id == customer_id
+        OrderTransaction.customer_id == customer_id,
+        OrderTransaction.status != "cancelled",
     )
     pay_q = select(func.coalesce(func.sum(Payment.amount), 0)).where(
         Payment.party_type == "customer", Payment.party_id == customer_id

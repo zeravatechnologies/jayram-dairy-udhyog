@@ -1,8 +1,8 @@
-"""OrderTransaction — one row per order/sale. Append-only, same
-discipline as RawMaterialTransaction. Sells FROM product stock, so
-saving an order also decrements the product's current_stock.
+"""OrderTransaction — one row per order/sale. Append-only for amounts;
+status may move placed → delivered | cancelled for advance bookings.
+Immediate sales are created as delivered and decrement product stock.
 """
-from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, Text, func
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base
@@ -20,6 +20,7 @@ class OrderTransaction(Base):
     rate = Column(Numeric(10, 2), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     status = Column(String, nullable=False, default="placed")  # "placed" | "delivered" | "cancelled"
+    planning_note = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     customer = relationship("Customer", back_populates="orders")

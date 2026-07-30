@@ -27,22 +27,19 @@ shows a real sign-in screen. Passwords are bcrypt-hashed, never stored
 in plaintext. Every sign-in and successful save action is written to
 a structured local log file.
 
-**Data:** SQLite, stored under the real Windows AppData location when
-packaged (`%LOCALAPPDATA%\JayramDairy\`), or a local `_devdata/` folder
-when running from source for development.
+**Data:** SQLite under `%LOCALAPPDATA%\JayramDairy\` when packaged, or
+`_devdata/` when running from source. Schema changes apply via Alembic
+on startup. Automatic backups live in `backups\` (before migrations and
+once per day on launch; last 10 kept).
 
 ## What's NOT in here yet (honestly)
 
 - Nepali BS *input* on date fields — dates display in BS everywhere,
   but entry still uses the system date. Worth a follow-up pass.
-- Automatic local backups (the deployment doc specifies these; the
-  mechanism isn't wired in yet).
-- Alembic migrations aren't set up yet — the schema is created fresh
-  via `create_all()`. Fine for this stage; needed before the first real
-  schema change ships to your friend's machine.
-- The actual Windows `.exe` — see `BUILD.md`. PyInstaller can't
-  cross-compile from this Linux sandbox; that step has to run on a real
-  Windows machine, with clear step-by-step instructions provided.
+- The actual Windows `.exe` — see `BUILD.md`. Build on a real Windows
+  machine (PyInstaller + Inno Setup), then smoke-test before the shop PC.
+- Code signing / SmartScreen — unsigned builds will show a Windows
+  warning; expected until a certificate is purchased.
 
 ## Running it yourself
 
@@ -52,8 +49,13 @@ python app/main.py
 ```
 
 First launch: create an account (any username/password, 4+ characters).
-Subsequent launches: sign in with what you created. Seeds 2 vendors,
-3 products, 2 customers on first run.
+Subsequent launches: sign in with what you created.
+
+**From source:** seeds 2 vendors, 3 products, 2 customers when the DB is
+empty (handy for development).
+
+**Packaged `.exe`:** starts empty — create the account, then add real
+vendors, products, and customers. No demo rows.
 
 ## Running the tests
 
@@ -61,16 +63,17 @@ Subsequent launches: sign in with what you created. Seeds 2 vendors,
 pytest tests/ -v
 ```
 
-60 tests, all passing — covering pricing, balance, production pool,
-orders/stock, payments, auth, activity logging, and dashboard stats,
-including several regression tests for real bugs caught while building
-(an ID-collision bug between vendor and order payments, and a log
-double-writing bug).
+Tests cover pricing, balance, production, orders/stock, payments, auth,
+activity logging, dashboard stats, Alembic migrations, backups, and
+seed gating.
 
-## Building the real Windows installer
+## Building / upgrading the Windows installer
 
-See `BUILD.md` for the full step-by-step — needs to run on an actual
-Windows machine, not this sandbox.
+See `BUILD.md` for:
+
+- Release checklist (bump both version strings, test, PyInstaller, Inno)
+- First install and upgrade steps on the shop PC
+- How to restore from `%LOCALAPPDATA%\JayramDairy\backups\` if needed
 
 ## What to check when you run it
 
@@ -84,7 +87,8 @@ Windows machine, not this sandbox.
    recent payments and reduces the right balance.
 6. Check the Activity Log — every action above should appear there,
    attributed to your username.
+7. Confirm `%LOCALAPPDATA%\JayramDairy\backups\` (or `_devdata\backups\`)
+   has a copy after the first successful launch with an existing DB.
 
-As always: anything that doesn't match how your friend's business
-actually runs is worth catching now.
-# jayram-dairy-udhyog
+As always: anything that doesn't match how the business actually runs
+is worth catching now.

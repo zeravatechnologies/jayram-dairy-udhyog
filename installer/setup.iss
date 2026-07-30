@@ -5,26 +5,26 @@
 ; from a Windows command prompt with ISCC.exe on PATH.
 ;
 ; This assumes PyInstaller has already produced dist\JayramDairyUdhyog\
-; per jayram_dairy.spec (see deployment-infra.md Section 3).
+; per jayram_dairy.spec (see BUILD.md).
 
 #define MyAppName "Jayram Dairy Udhyog"
-#define MyAppVersion "0.5.0"
+#define MyAppVersion "0.5.1"
 #define MyAppExeName "JayramDairyUdhyog.exe"
 
 [Setup]
-AppId={{8F1B2C4E-JAYRAM-DAIRY-UDHYOG-0001}
+; Stable AppId so later Setup.exe builds upgrade in place (do not change).
+AppId={{8F1B2C4E-4A91-4D3B-9C2E-1A2B3C4D5E6F}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-DefaultDirName={autopf}\JayramDairyUdhyog
+; PrivilegesRequired=lowest cannot write to Program Files — install under
+; the user's LocalAppData\Programs. Business data stays in
+; %LOCALAPPDATA%\JayramDairy\ (separate from this install folder).
+DefaultDirName={localappdata}\Programs\JayramDairyUdhyog
 DefaultGroupName={#MyAppName}
 OutputBaseFilename=JayramDairyUdhyog-Setup-v{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
-; No admin rights required — installs to the user's own folder, matching
-; the "AppData\Local for data, not Program Files" reasoning in the
-; deployment doc; simplifies install on a shop PC with a limited account.
 PrivilegesRequired=lowest
-DefaultDirName={autopf}\JayramDairyUdhyog
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -46,5 +46,4 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; Flags
 
 ; IMPORTANT: deliberately NOT removing %LOCALAPPDATA%\JayramDairy on
 ; uninstall — that's where the live database, backups, and activity
-; log live (see deployment-infra.md Section 3). Uninstalling the app
-; must never silently delete the owner's business records.
+; log live. Uninstalling the app must never silently delete business records.

@@ -13,7 +13,7 @@ import os
 
 from app.utils.bs_date import NEPAL_TIMEZONE, to_bs_display
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.5.1"
 
 _logger = None
 

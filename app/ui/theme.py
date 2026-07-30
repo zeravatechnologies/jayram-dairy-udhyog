@@ -1,5 +1,5 @@
 """Shared visual system and small UI setup helpers."""
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
@@ -167,14 +167,37 @@ def configure_form(form: QFormLayout) -> None:
 
 def make_scrollable_page(page: QWidget) -> QScrollArea:
     """Keep dense pages usable when the application is not maximized."""
+    page.setMinimumWidth(0)
+    page.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    # Scroll areas honour the widget minimumSizeHint. Dense button rows and
+    # tables report a wide hint; wrap so width can shrink to the viewport
+    # while height still scrolls vertically.
+    wrapper = _HorizontallyShrinkablePage(page)
+
     scroll_area = QScrollArea()
-    scroll_area.setWidget(page)
+    scroll_area.setWidget(wrapper)
     scroll_area.setWidgetResizable(True)
     scroll_area.setFrameShape(QFrame.Shape.NoFrame)
     scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
     return scroll_area
+
+
+class _HorizontallyShrinkablePage(QWidget):
+    def __init__(self, child: QWidget):
+        super().__init__()
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(child)
+
+    def minimumSizeHint(self):
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
 
 
 def configure_table(table: QTableWidget, stretch_column: int | None = None):

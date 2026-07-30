@@ -43,7 +43,9 @@ def test_main_window_has_readable_navigation_and_active_state(qt_app, session, t
 
     window.show_screen("production")
     assert window.nav_buttons["production"].property("active") == "true"
-    assert window.stack.currentWidget().widget() is window.production_screen
+    assert window.stack.currentWidget().widget().layout().itemAt(0).widget() is (
+        window.production_screen
+    )
     window.close()
 
 

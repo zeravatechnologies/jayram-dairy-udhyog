@@ -16,7 +16,9 @@ from app.services.products import (
     create_product,
     delete_product as delete_product_record,
     list_products,
+    update_product,
 )
+from app.models.product import Product
 from app.services.production import get_pool_available, save_production_batch
 from app.ui.bs_date_input import BsDateInput, OptionalBsDateInput
 from app.ui.theme import configure_form, make_button, set_role
@@ -191,12 +193,19 @@ class ProductionScreen(QWidget):
         card_layout = QVBoxLayout(card)
         stock_label = QLabel(f"{label}\n{current_stock} {unit}")
         stock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        button_row = QHBoxLayout()
+        edit_button = make_button("Edit")
+        edit_button.clicked.connect(
+            lambda checked=False, pid=product_id: self.open_edit_product(pid)
+        )
         delete_button = make_button("Delete", "danger")
         delete_button.clicked.connect(
             lambda checked=False: self.confirm_delete_product(product_id, label)
         )
+        button_row.addWidget(edit_button)
+        button_row.addWidget(delete_button)
         card_layout.addWidget(stock_label)
-        card_layout.addWidget(delete_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        card_layout.addLayout(button_row)
         return card
 
     def confirm_delete_product(self, product_id, label):
@@ -226,6 +235,29 @@ class ProductionScreen(QWidget):
                 QMessageBox.warning(self, "Couldn't add product", str(e))
                 return
             self.refresh()
+
+    def open_edit_product(self, product_id):
+        product = self.session.get(Product, product_id)
+        if product is None:
+            QMessageBox.warning(self, "No product", "That product no longer exists.")
+            return
+        dlg = ProductDialog(self, product=product)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        v = dlg.values()
+        try:
+            update_product(
+                self.session,
+                product_id,
+                name=v["name"],
+                variant=v["variant"],
+                unit=v["unit"],
+                conversion_ratio=v["conversion_ratio"],
+            )
+        except (InvalidOperation, ValueError) as e:
+            QMessageBox.warning(self, "Couldn't update product", str(e))
+            return
+        self.refresh()
 
     def save_batch(self):
         product_id = self.product_combo.currentData()

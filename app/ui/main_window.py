@@ -61,9 +61,14 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.dashboard_screen = DashboardScreen(self.session, username=self.username)
         self.vendor_screen = VendorScreen(self.session)
+        self.vendor_screen.username = self.username
+        self.vendor_screen.milk_saved.connect(self.dashboard_screen.refresh)
         self.production_screen = ProductionScreen(self.session)
         self.orders_screen = OrdersScreen(self.session)
+        self.orders_screen.username = self.username
+        self.orders_screen.orders_changed.connect(self.dashboard_screen.refresh)
         self.payments_screen = PaymentsScreen(self.session, on_payment_saved=self._on_payment_saved)
+        self.payments_screen.username = self.username
         self.activity_log_screen = ActivityLogScreen(self.log_dir)
 
         screens = (
@@ -101,14 +106,22 @@ class MainWindow(QMainWindow):
         """Attach logging around each screen's save action, without
         threading a logger through every service call signature."""
         self._wrap(self.vendor_screen, "save_entry", "milk_collection.save")
+        self._wrap(self.vendor_screen, "open_edit_milk", "milk_collection.update")
+        self._wrap(self.vendor_screen, "delete_selected_milk", "milk_collection.delete")
         self._wrap(self.vendor_screen, "open_add_vendor", "vendor.create")
         self._wrap(self.vendor_screen, "open_edit_vendor", "vendor.update")
         self._wrap(self.production_screen, "save_batch", "production.save_batch")
         self._wrap(self.production_screen, "open_add_product", "product.create")
+        self._wrap(self.production_screen, "open_edit_product", "product.update")
         self._wrap(self.orders_screen, "save_order", "order.save")
+        self._wrap(self.orders_screen, "open_edit_order", "order.update")
+        self._wrap(self.orders_screen, "mark_selected_delivered", "order.deliver")
+        self._wrap(self.orders_screen, "cancel_selected_order", "order.cancel")
         self._wrap(self.orders_screen, "open_add_customer", "customer.create")
         self._wrap(self.orders_screen, "open_edit_customer", "customer.update")
         self._wrap(self.payments_screen, "save_payment", "payment.save")
+        self._wrap(self.payments_screen, "open_edit_payment", "payment.update")
+        self._wrap(self.payments_screen, "delete_selected_payment", "payment.delete")
 
     def _wrap(self, obj, method_name, action_label):
         original = getattr(obj, method_name)

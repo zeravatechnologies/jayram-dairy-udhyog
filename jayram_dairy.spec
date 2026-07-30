@@ -10,7 +10,14 @@
 # Inno Setup (see installer/setup.iss) wraps into Setup.exe.
 
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
+
+# nepali_datetime loads calendar_bs.csv from its package data/ folder at
+# import time. PyInstaller packs .py modules but not those data files unless
+# we collect them explicitly (path is package-relative, not hardcoded).
+nepali_datetime_datas = collect_data_files('nepali_datetime')
 
 a = Analysis(
     ['app/main.py'],
@@ -18,8 +25,19 @@ a = Analysis(
     binaries=[],
     datas=[
         ('app/assets/fonts/NotoSansDevanagari-Regular.ttf', 'app/assets/fonts'),
+        ('alembic.ini', '.'),
+        # Must NOT land as _internal/alembic — that shadows the Alembic library.
+        ('alembic', 'alembic_scripts'),
+    ] + nepali_datetime_datas,
+    hiddenimports=[
+        'bcrypt',
+        'reportlab',
+        'reportlab.pdfbase',
+        'reportlab.pdfbase.ttfonts',
+        'alembic',
+        'logging.config',
+        'nepali_datetime',
     ],
-    hiddenimports=['bcrypt'],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],

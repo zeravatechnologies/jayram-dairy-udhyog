@@ -1,8 +1,9 @@
 """RawMaterialTransaction — one row per milk delivery.
 
-Append-only by convention: the service layer never updates or deletes
-these rows. Corrections are made by adding a new row, so the ledger
-always reflects exactly what was entered, when.
+Rows are created by milk collection and may be corrected in place via
+the service layer (update/delete) when the owner fixes typos. Quantity
+reductions are rejected if they would make the derived raw-milk pool
+negative.
 """
 from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship

@@ -9,7 +9,12 @@ import pytest
 from app.models.base import make_session_factory
 from app.services.vendors import create_vendor
 from app.services.customers import create_customer
-from app.services.payments import record_payment, list_recent_payments
+from app.services.payments import (
+    delete_payment,
+    list_recent_payments,
+    record_payment,
+    update_payment,
+)
 from app.services.balance import get_vendor_balance, get_customer_balance
 
 
@@ -80,3 +85,28 @@ def test_recent_payments_sort_across_bs_new_year(session):
         Decimal("200"),
         Decimal("100"),
     ]
+
+
+def test_update_payment_changes_balance(session):
+    v = create_vendor(session, "Hari Thapa", "111", "addr", "flat_rate", Decimal("58"))
+    payment = record_payment(
+        session, "vendor", v.vendor_id, Decimal("500"), date(2026, 7, 14), mode="advance"
+    )
+    assert get_vendor_balance(session, v.vendor_id) == Decimal("-500")
+
+    update_payment(
+        session, payment.payment_id, Decimal("200"), date(2026, 7, 14), mode="partial"
+    )
+    assert get_vendor_balance(session, v.vendor_id) == Decimal("-200")
+    assert payment.amount == Decimal("200")
+    assert payment.mode == "partial"
+
+
+def test_delete_payment_restores_balance(session):
+    v = create_vendor(session, "Hari Thapa", "111", "addr", "flat_rate", Decimal("58"))
+    payment = record_payment(
+        session, "vendor", v.vendor_id, Decimal("500"), date(2026, 7, 14)
+    )
+    delete_payment(session, payment.payment_id)
+    assert get_vendor_balance(session, v.vendor_id) == Decimal("0")
+    assert list_recent_payments(session) == []

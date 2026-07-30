@@ -1,34 +1,37 @@
 # Building the Windows Installer
 
-**Important:** this app was developed and tested in a Linux environment
-(that's what built and ran all 60 tests and the screenshots you've been
-reviewing). PyInstaller does **not** cross-compile — a Windows `.exe`
-must be built by running PyInstaller **on an actual Windows machine**
-(your own PC, or a Windows GitHub Actions runner). This document is the
-step-by-step for doing that build, since it's the one remaining step
-that genuinely can't happen in this sandbox.
+**Important:** PyInstaller does **not** cross-compile — a Windows `.exe`
+must be built by running PyInstaller **on an actual Windows machine**.
 
 ## Prerequisites (on a Windows machine)
 
 1. Install Python 3.12 from python.org (check "Add to PATH" during install).
 2. Install Inno Setup (free): https://jrsoftware.org/isinfo.php
-3. Open a command prompt in the project folder.
+3. Open a command prompt in the project folder (`jayram-dairy`).
+
+## Every release (checklist)
+
+1. Bump **both** version strings so they always match:
+   - `MyAppVersion` in `installer\setup.iss`
+   - `APP_VERSION` in `app\utils\activity_log.py`
+2. Run the tests: `pytest tests/ -v`
+3. Build the exe bundle (Step 3 below).
+4. Build the installer (Step 4 below).
+5. Generate the SHA256 checksum (Step 5 below).
+6. Upload `Setup.exe` + checksum as a GitHub Release (private repo is fine).
 
 ## Step 1 — Install dependencies
 
 ```
 pip install -r requirements.txt
-pip install pyinstaller
+pip install pyinstallerpip install pyinstaller
 ```
 
-## Step 2 — Run the tests one more time, on the real target OS
+## Step 2 — Run the tests on Windows
 
 ```
 pytest tests/ -v
 ```
-
-All 60 should pass here too — this is a cheap, important sanity check
-that nothing about the logic is platform-specific before you package it.
 
 ## Step 3 — Build the executable bundle
 
@@ -37,56 +40,70 @@ pyinstaller jayram_dairy.spec
 ```
 
 This produces `dist\JayramDairyUdhyog\` — a folder containing
-`JayramDairyUdhyog.exe` and everything it needs to run. Try launching
-the `.exe` directly from that folder first, before building the
-installer, to confirm the bundle itself works.
+`JayramDairyUdhyog.exe` and everything it needs (including Alembic
+migration scripts). Try launching the `.exe` from that folder first.
 
 ## Step 4 — Build the installer
-
-Open `installer\setup.iss` in the Inno Setup Compiler and click **Build**,
-or from the command line:
 
 ```
 ISCC.exe installer\setup.iss
 ```
 
-This produces `installer\Output\JayramDairyUdhyog-Setup-v0.5.0.exe` —
-this is the one file you send to your friend.
+Or open `installer\setup.iss` in the Inno Setup Compiler and click **Build**.
+
+Output: `installer\Output\JayramDairyUdhyog-Setup-v0.5.1.exe`
 
 ## Step 5 — Generate the checksum
 
 ```
-certutil -hashfile installer\Output\JayramDairyUdhyog-Setup-v0.5.0.exe SHA256
+certutil -hashfile installer\Output\JayramDairyUdhyog-Setup-v0.5.1.exe SHA256
 ```
 
-Send this alongside the download link, per `deployment-infra.md` Section 3 —
-your friend can verify it with the same command before running the
-installer.
+Send this alongside the download link so the shop PC can verify before install.
 
 ## Step 6 — Distribute
 
-Upload the `Setup.exe` as a GitHub Release on a private repo you
-control (or wherever you've decided to host it), post the checksum next
-to it, and send your friend the link.
+Upload the `Setup.exe` as a GitHub Release, post the checksum next to it,
+and send the link to the user.
 
-## Every subsequent release
+---
 
-Bump `MyAppVersion` in `installer\setup.iss` and `APP_VERSION` in
-`app/utils/activity_log.py` together — they should always match, since
-the activity log records the version and that's the first thing you'll
-ask about when troubleshooting (`deployment-infra.md` Section 4). Then
-repeat Steps 1–6.
+## Upgrading on the shop PC (future releases)
 
-## What this sandbox already verified for you
+The installer uses a stable `AppId` and leaves business data in
+`%LOCALAPPDATA%\JayramDairy\` (database, `backups\`, `logs\`). Installing
+a newer Setup.exe replaces the program files only.
 
-- All 60 unit/integration tests pass
-- The full app runs correctly headlessly, including login, all six
-  screens, activity logging, and the AppData path logic
-- The Devanagari font renders correctly when bundled
-- Screenshots confirm the actual visual output at each stage
+1. Close Jayram Dairy Udhyog completely.
+2. Run the new `JayramDairyUdhyog-Setup-vX.Y.Z.exe`.
+3. Launch the app, sign in, and open **Activity Log** — the version column
+   should show the new `APP_VERSION`.
+4. Spot-check one vendor balance and one recent payment.
 
-What it could **not** verify: how it actually looks and performs in a
-real Windows window, on real Windows fonts/DPI scaling, on hardware
-similar to the shop's PC. That first real Windows run — Step 3 above —
-is worth doing carefully and comparing against the screenshots you've
-already seen.
+### If something looks wrong after an upgrade
+
+1. Close the app.
+2. Open `%LOCALAPPDATA%\JayramDairy\backups\`
+3. Copy the newest `jayram_dairy_*.db` over
+   `%LOCALAPPDATA%\JayramDairy\jayram_dairy.db` (replace the live file).
+4. Restart the app.
+
+The app also creates a backup before schema migrations and once per day
+on launch (keeping the last 10 backup files).
+
+---
+
+## First install notes
+
+- Packaged installs **do not** load demo vendors/products/customers.
+  After creating an account, add real masters from the screens.
+- Demo seed data only appears when running from source (`python app/main.py`).
+
+## What this sandbox already verified
+
+- Unit/integration tests including migrations, backups, and seed gating
+- AppData path logic, activity logging, Devanagari font bundling
+
+What still needs a real Windows smoke test after you build: DPI scaling,
+antivirus/SmartScreen prompts (unsigned builds will warn), and a full
+click-through on hardware similar to the shop PC.

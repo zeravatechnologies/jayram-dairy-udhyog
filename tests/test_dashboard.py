@@ -12,9 +12,11 @@ from app.services.milk_collection import record_milk_collection
 from app.services.orders import create_order
 from app.services.payments import record_payment
 from app.services.dashboard import (
-    get_today_milk_total, get_total_vendor_payable, get_total_customer_due,
+    get_today_milk_total, get_today_milk_by_session,
+    get_total_vendor_payable, get_total_customer_due,
     get_low_stock_products,
 )
+from app.services.production import get_pool_available
 from app.utils.bs_date import today_in_nepal
 
 
@@ -31,6 +33,34 @@ def test_today_milk_total_only_counts_today(session):
     record_milk_collection(session, v.vendor_id, today_in_nepal(), Decimal("10"))
     record_milk_collection(session, v.vendor_id, date(2020, 1, 1), Decimal("999"))  # not today
     assert get_today_milk_total(session) == Decimal("10")
+
+
+def test_today_milk_includes_morning_and_evening(session):
+    v = create_vendor(session, "Hari Thapa", "1", "a", "flat_rate", Decimal("58"))
+    today = today_in_nepal()
+    record_milk_collection(
+        session, v.vendor_id, today, Decimal("10"), session_label="morning",
+    )
+    record_milk_collection(
+        session, v.vendor_id, today, Decimal("5"), session_label="evening",
+    )
+    assert get_today_milk_total(session, today=today) == Decimal("15")
+    by_session = get_today_milk_by_session(session, today=today)
+    assert by_session["morning"] == Decimal("10")
+    assert by_session["evening"] == Decimal("5")
+
+
+def test_evening_on_other_date_in_pool_not_in_today(session):
+    v = create_vendor(session, "Hari Thapa", "1", "a", "flat_rate", Decimal("58"))
+    today = today_in_nepal()
+    record_milk_collection(
+        session, v.vendor_id, today, Decimal("10"), session_label="morning",
+    )
+    record_milk_collection(
+        session, v.vendor_id, date(2020, 1, 1), Decimal("7"), session_label="evening",
+    )
+    assert get_today_milk_total(session, today=today) == Decimal("10")
+    assert get_pool_available(session) == Decimal("17")
 
 
 def test_total_vendor_payable_sums_only_positive_balances(session):

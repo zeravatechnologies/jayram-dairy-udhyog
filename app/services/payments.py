@@ -76,6 +76,69 @@ def get_txn_status(amount_due: Decimal, amount_paid: Decimal) -> str:
     return "partial"
 
 
+def list_payments_for_party(session, party_type: str, party_id: int):
+    """Chronological payments for one vendor or customer."""
+    if party_type not in ("vendor", "customer"):
+        raise ValueError("party_type must be 'vendor' or 'customer'")
+    return session.execute(
+        select(Payment)
+        .where(Payment.party_type == party_type, Payment.party_id == party_id)
+        .order_by(Payment.date.asc(), Payment.payment_id.asc())
+    ).scalars().all()
+
+
+def list_payments_for_txn(session, txn_id: int, party_type: str):
+    """Payments linked to one milk delivery or customer order."""
+    if party_type not in ("vendor", "customer"):
+        raise ValueError("party_type must be 'vendor' or 'customer'")
+    return session.execute(
+        select(Payment)
+        .where(
+            Payment.linked_txn_id == txn_id,
+            Payment.party_type == party_type,
+        )
+        .order_by(Payment.date.asc(), Payment.payment_id.asc())
+    ).scalars().all()
+
+
+def get_payment(session, payment_id: int) -> Payment | None:
+    return session.get(Payment, payment_id)
+
+
+def update_payment(
+    session,
+    payment_id: int,
+    amount: Decimal,
+    date,
+    mode: str = "advance",
+    status: str = "paid",
+) -> Payment:
+    """Correct an existing payment. Party type/id stay fixed."""
+    payment = session.get(Payment, payment_id)
+    if payment is None:
+        raise ValueError(f"No such payment: {payment_id}")
+
+    amount = Decimal(amount)
+    if amount <= 0:
+        raise ValueError("Amount must be greater than zero")
+
+    payment.amount = amount
+    payment.date = date
+    payment.mode = mode
+    payment.status = status
+    session.commit()
+    return payment
+
+
+def delete_payment(session, payment_id: int) -> None:
+    """Remove a payment. Vendor/customer balances recalculate automatically."""
+    payment = session.get(Payment, payment_id)
+    if payment is None:
+        raise ValueError(f"No such payment: {payment_id}")
+    session.delete(payment)
+    session.commit()
+
+
 def list_recent_payments(session, limit: int = 20):
     """Recent payments across both vendors and customers, with the
     party's display name resolved — used by the Payments screen and
