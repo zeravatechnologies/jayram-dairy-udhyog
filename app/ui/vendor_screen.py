@@ -99,43 +99,59 @@ class MilkCollectionDialog(QDialog):
         layout = QFormLayout(self)
         configure_form(layout)
 
+        # Order matters: slots such as recompute_preview read every widget on
+        # this dialog, so nothing may be connected until they all exist and
+        # carry their starting values.
+        self._build_widgets(txn, amount_paid)
+        self._apply_txn_state(txn, vendor)
+        self._connect_signals()
+        self._add_rows(layout)
+        self.recompute_preview()
+
+    def _build_widgets(self, txn, amount_paid: Decimal) -> None:
         self.session_combo = QComboBox()
         self.session_combo.addItem("Morning", userData="morning")
         self.session_combo.addItem("Evening", userData="evening")
         self.session_combo.addItem("Advance", userData="advance")
-        self.session_combo.setCurrentIndex(self.session_combo.findData(txn.session))
 
         self.collection_date_input = BsDateInput()
-        self.collection_date_input.set_ad_date(txn.date)
 
         self.qty_input = QLineEdit(str(txn.quantity_l))
         self.qty_input.setValidator(QDoubleValidator(0.001, 999999.0, 3, self))
-        self.qty_input.textChanged.connect(self.recompute_preview)
 
         self.fat_input = QLineEdit(str(txn.fat_pct) if txn.fat_pct is not None else "")
         self.fat_input.setValidator(QDoubleValidator(0.0, 100.0, 2, self))
-        self.fat_input.textChanged.connect(self.recompute_preview)
 
         self.override_check = QCheckBox("Negotiated delivery rate")
-        self.override_check.stateChanged.connect(self.on_override_toggled)
         self.override_rate_input = QLineEdit()
         self.override_rate_input.setPlaceholderText("e.g. 70.00 (rate per litre)")
         self.override_rate_input.setValidator(QDoubleValidator(0.01, 999999.0, 2, self))
-        self.override_rate_input.textChanged.connect(self.recompute_preview)
 
         self.paid_now_input = QLineEdit(str(amount_paid) if amount_paid > 0 else "")
         self.paid_now_input.setPlaceholderText("Leave blank if paying later")
         self.paid_now_input.setValidator(QDoubleValidator(0.0, 999999999.0, 2, self))
 
-        if _was_manual_rate(txn, vendor):
-            self.override_check.setChecked(True)
-            self.override_rate_input.setText(str(txn.rate_applied))
-        else:
-            self.override_rate_input.setEnabled(False)
-
         self.preview_label = QLabel("Amount: —")
         set_role(self.preview_label, "metric")
 
+    def _apply_txn_state(self, txn, vendor) -> None:
+        self.session_combo.setCurrentIndex(self.session_combo.findData(txn.session))
+        self.collection_date_input.set_ad_date(txn.date)
+
+        negotiated = _was_manual_rate(txn, vendor)
+        self.override_check.setChecked(negotiated)
+        self.override_rate_input.setEnabled(negotiated)
+        self.fat_input.setEnabled(not negotiated)
+        if negotiated:
+            self.override_rate_input.setText(str(txn.rate_applied))
+
+    def _connect_signals(self) -> None:
+        self.qty_input.textChanged.connect(self.recompute_preview)
+        self.fat_input.textChanged.connect(self.recompute_preview)
+        self.override_rate_input.textChanged.connect(self.recompute_preview)
+        self.override_check.stateChanged.connect(self.on_override_toggled)
+
+    def _add_rows(self, layout: QFormLayout) -> None:
         layout.addRow("मिति · Date (BS):", self.collection_date_input)
         layout.addRow("Session:", self.session_combo)
         layout.addRow("Quantity (L):", self.qty_input)
@@ -151,7 +167,6 @@ class MilkCollectionDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
-        self.recompute_preview()
 
     def on_override_toggled(self):
         enabled = self.override_check.isChecked()
