@@ -22,6 +22,7 @@ from app.models.product import Product
 from app.services.production import get_pool_available, save_production_batch
 from app.ui.bs_date_input import BsDateInput, OptionalBsDateInput
 from app.ui.theme import configure_form, make_button, set_role
+from app.utils.activity_log import log_action
 from app.utils.bs_date import to_bs_display
 
 
@@ -61,16 +62,17 @@ class ProductionScreen(QWidget):
     def __init__(self, session):
         super().__init__()
         self.session = session
+        self.username = ""
         self.stock_cards = []
         self.stock_columns = 4
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        header_row = QVBoxLayout()
+        header_row = QHBoxLayout()
         title = set_role(QLabel("उत्पादन · Production & Stock"), "pageTitle")
         title.setWordWrap(True)
-        header_row.addWidget(title)
+        header_row.addWidget(title,stretch=1)
         actions = QHBoxLayout()
         actions.addStretch()
         add_btn = make_button("+ Add product")
@@ -223,6 +225,7 @@ class ProductionScreen(QWidget):
         except ValueError as error:
             QMessageBox.warning(self, "Couldn't delete product", str(error))
             return
+        log_action(self.username, "product.delete", label)
         self.refresh()
 
     def open_add_product(self):
@@ -234,6 +237,8 @@ class ProductionScreen(QWidget):
             except (InvalidOperation, ValueError) as e:
                 QMessageBox.warning(self, "Couldn't add product", str(e))
                 return
+            product_label = f"{v['name']} ({v['variant']})" if v["variant"] else v["name"]
+            log_action(self.username, "product.create", product_label)
             self.refresh()
 
     def open_edit_product(self, product_id):
@@ -257,6 +262,8 @@ class ProductionScreen(QWidget):
         except (InvalidOperation, ValueError) as e:
             QMessageBox.warning(self, "Couldn't update product", str(e))
             return
+        product_label = f"{v['name']} ({v['variant']})" if v["variant"] else v["name"]
+        log_action(self.username, "product.update", product_label)
         self.refresh()
 
     def save_batch(self):
@@ -264,6 +271,7 @@ class ProductionScreen(QWidget):
         if product_id is None:
             QMessageBox.warning(self, "No product", "Please add a product first.")
             return
+        product_label = self.product_combo.currentText()
         try:
             consumed = Decimal(self.consumed_input.text())
             output = Decimal(self.output_input.text())
@@ -286,6 +294,11 @@ class ProductionScreen(QWidget):
         expiry_text = to_bs_display(expiry_date) if expiry_date else "not set"
         self.feedback_label.setText(
             f"Batch saved for {to_bs_display(production_date)} · Expiry: {expiry_text}"
+        )
+        log_action(
+            self.username,
+            "production.save_batch",
+            f"{product_label} · {output} from {consumed} L",
         )
         self.production_date_input.reset_to_today()
         self.expiry_date_input.clear()

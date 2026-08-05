@@ -8,11 +8,13 @@ from app.models.base import Base
 config = context.config
 
 # Optional: frozen builds may omit logging.config; migrations do not need it.
+# disable_existing_loggers=False so Alembic does not mute the app's
+# jayram_dairy activity logger that setup_logging already configured.
 if config.config_file_name is not None:
     try:
         from logging.config import fileConfig
 
-        fileConfig(config.config_file_name)
+        fileConfig(config.config_file_name, disable_existing_loggers=False)
     except ModuleNotFoundError:
         pass
 

@@ -71,8 +71,10 @@ class AppController:
 
 
 def main():
-    setup_logging(LOG_DIR)
+    # Migrations run first — Alembic may touch logging config. Attach the
+    # activity FileHandler afterward so sign-in / data-change lines are kept.
     Session = make_session_factory(DB_PATH, backup_dir=BACKUP_DIR)
+    setup_logging(LOG_DIR)
     # Daily safety-net backup after migrations (skipped if one already exists today).
     backup_database(DB_PATH, BACKUP_DIR, force=False)
 

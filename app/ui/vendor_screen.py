@@ -28,6 +28,7 @@ from app.services.pricing import calculate_milk_amount
 from app.services.pdf_export import write_vendor_statement
 from app.ui.bs_date_input import BsDateInput
 from app.ui.pdf_actions import save_pdf_with_feedback
+from app.utils.activity_log import log_action
 from app.ui.theme import (
     AMBER,
     GREEN,
@@ -208,11 +209,11 @@ class VendorScreen(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        header_row = QVBoxLayout()
+        header_row = QHBoxLayout()
         title = set_role(QLabel("दूध विक्रेता · Vendor Ledger"), "pageTitle")
         title.setWordWrap(True)
-        header_row.addWidget(title)
-        actions = QVBoxLayout()
+        header_row.addWidget(title,stretch=1)
+        actions = QHBoxLayout()
         actions.setSpacing(8)
         add_vendor_btn = make_button("+ थप्नुहोस् · Add Vendor")
         add_vendor_btn.clicked.connect(self.open_add_vendor)
@@ -406,6 +407,7 @@ class VendorScreen(QWidget):
         self.collection_date_input.reset_to_today()
         self.preview_label.setText("Amount: —")
         self.feedback_label.setText("Milk collection saved successfully.")
+        log_action(self.username, "milk_collection.save", f"{vendor.name} · {qty} L")
         self.refresh_ledger()
         self.milk_saved.emit()
 
@@ -434,6 +436,7 @@ class VendorScreen(QWidget):
             QMessageBox.warning(self, "Couldn't update this entry", str(e))
             return
         self.feedback_label.setText("Milk collection updated successfully.")
+        log_action(self.username, "milk_collection.update", f"{vendor.name} · txn #{txn.txn_id}")
         self.refresh_ledger()
         self.milk_saved.emit()
 
@@ -452,12 +455,14 @@ class VendorScreen(QWidget):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
+        context = f"txn #{txn.txn_id} · {txn.quantity_l} L"
         try:
             delete_milk_collection(self.session, txn.txn_id)
         except ValueError as e:
             QMessageBox.warning(self, "Couldn't delete this entry", str(e))
             return
         self.feedback_label.setText("Milk collection deleted.")
+        log_action(self.username, "milk_collection.delete", context)
         self.refresh_ledger()
         self.milk_saved.emit()
 
@@ -470,6 +475,7 @@ class VendorScreen(QWidget):
             except (InvalidOperation, ValueError) as e:
                 QMessageBox.warning(self, "Couldn't add vendor", str(e))
                 return
+            log_action(self.username, "vendor.create", v["name"])
             self.load_vendors()
 
     def open_edit_vendor(self):
@@ -485,6 +491,7 @@ class VendorScreen(QWidget):
             except (InvalidOperation, ValueError) as e:
                 QMessageBox.warning(self, "Couldn't update vendor", str(e))
                 return
+            log_action(self.username, "vendor.update", v["name"])
             self.load_vendors()
 
     def download_statement(self):

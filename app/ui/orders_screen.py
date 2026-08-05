@@ -17,7 +17,13 @@ from app.models.customer import Customer
 from app.models.order import OrderTransaction
 from app.models.product import Product
 from app.services.customers import create_customer, update_customer
-from app.services.orders import cancel_order, create_order, deliver_order, update_placed_order
+from app.services.orders import (
+    cancel_order,
+    create_order,
+    delete_order,
+    deliver_order,
+    update_placed_order,
+)
 from app.services.balance import get_customer_balance
 from app.services.payments import get_amount_paid_for_txn, get_txn_status
 from app.services.pdf_export import write_customer_statement, write_order_payment_history
@@ -31,6 +37,7 @@ from app.ui.theme import (
     make_button,
     set_role,
 )
+from app.utils.activity_log import log_action
 from app.utils.bs_date import to_bs_display, to_devanagari_number
 
 STATUS_COLORS = {"paid": GREEN, "partial": AMBER, "pending": AMBER}
@@ -158,10 +165,10 @@ class OrdersScreen(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        header_row = QVBoxLayout()
+        header_row = QHBoxLayout()
         title = set_role(QLabel("ग्राहक तथा अर्डर · Customers & Orders"), "pageTitle")
         title.setWordWrap(True)
-        header_row.addWidget(title)
+        header_row.addWidget(title,stretch=1)
         actions = QHBoxLayout()
         actions.addStretch()
         add_btn = make_button("+ Add Customer")
@@ -262,6 +269,9 @@ class OrdersScreen(QWidget):
         cancel_btn = make_button("Cancel order")
         cancel_btn.clicked.connect(self.cancel_selected_order)
         action_row.addWidget(cancel_btn)
+        delete_btn = make_button("Delete selected", "danger")
+        delete_btn.clicked.connect(self.delete_selected_order)
+        action_row.addWidget(delete_btn)
         order_pdf_btn = make_button("Download order PDF")
         order_pdf_btn.clicked.connect(self.download_order_history)
         action_row.addWidget(order_pdf_btn)
@@ -366,6 +376,7 @@ class OrdersScreen(QWidget):
         self.preview_label.setText("Amount: —")
         self.advance_hint.setText("")
         self.feedback_label.setText("Order saved successfully.")
+        log_action(self.username, "order.save", f"{customer.name} · qty {qty}")
         self.refresh_ledger()
         self.orders_changed.emit()
 
@@ -402,6 +413,7 @@ class OrdersScreen(QWidget):
             QMessageBox.warning(self, "Couldn't update this order", str(e))
             return
         self.feedback_label.setText("Order updated successfully.")
+        log_action(self.username, "order.update", f"order #{order.order_id}")
         self.refresh_ledger()
         self.orders_changed.emit()
 
@@ -416,6 +428,7 @@ class OrdersScreen(QWidget):
             QMessageBox.warning(self, "Couldn't deliver order", str(e))
             return
         self.feedback_label.setText("Order marked delivered.")
+        log_action(self.username, "order.deliver", f"order #{order.order_id}")
         self.refresh_ledger()
         self.orders_changed.emit()
 
@@ -430,6 +443,44 @@ class OrdersScreen(QWidget):
             QMessageBox.warning(self, "Couldn't cancel order", str(e))
             return
         self.feedback_label.setText("Order cancelled.")
+        log_action(self.username, "order.cancel", f"order #{order.order_id}")
+        self.refresh_ledger()
+        self.orders_changed.emit()
+
+    def delete_selected_order(self):
+        order = self._selected_order()
+        if order is None:
+            QMessageBox.warning(self, "No order selected", "Select an order first.")
+            return
+        product_label = (
+            f"{order.product.name} ({order.product.variant})"
+            if order.product.variant
+            else order.product.name
+        )
+        stock_note = (
+            " Finished-goods stock for this order will be restored."
+            if order.status == "delivered"
+            else ""
+        )
+        answer = QMessageBox.question(
+            self,
+            "Delete order",
+            f"Permanently delete this order ({product_label}, "
+            f"{order.quantity} on {to_bs_display(order.order_date)})? "
+            f"Linked payments for this order will also be removed.{stock_note}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        context = f"order #{order.order_id} · {product_label}"
+        try:
+            delete_order(self.session, order.order_id)
+        except ValueError as e:
+            QMessageBox.warning(self, "Couldn't delete order", str(e))
+            return
+        self.feedback_label.setText("Order deleted.")
+        log_action(self.username, "order.delete", context)
         self.refresh_ledger()
         self.orders_changed.emit()
 
@@ -471,6 +522,7 @@ class OrdersScreen(QWidget):
             except (InvalidOperation, ValueError) as e:
                 QMessageBox.warning(self, "Couldn't add customer", str(e))
                 return
+            log_action(self.username, "customer.create", v["name"])
             self.load_customers()
 
     def open_edit_customer(self):
@@ -486,6 +538,7 @@ class OrdersScreen(QWidget):
             except (InvalidOperation, ValueError) as e:
                 QMessageBox.warning(self, "Couldn't update customer", str(e))
                 return
+            log_action(self.username, "customer.update", v["name"])
             self.load_customers()
 
     def refresh_ledger(self):

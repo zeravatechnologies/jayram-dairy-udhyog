@@ -1,7 +1,14 @@
-PyQt6>=6.7
+# Pin PyQt6 and PyQt6-Qt6 to the SAME minor/patch. A mismatch
+# (e.g. PyQt6 6.11.0 + PyQt6-Qt6 6.11.1) causes the packaged exe to fail with:
+#   ImportError: DLL load failed while importing QtWidgets:
+#   The specified procedure could not be found.
+# That failure is often masked on the build PC if Anaconda is on PATH.
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.0
 SQLAlchemy>=2.0
 alembic>=1.13
 nepali-datetime==1.0.8.5
 bcrypt>=4.1
 reportlab>=4.2
 pytest>=8.0
+pyinstaller>=6.0

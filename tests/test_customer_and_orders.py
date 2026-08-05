@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 
 from app.models.base import make_session_factory
+from app.models.order import OrderTransaction
 from app.services.customers import create_customer, update_customer, delete_customer, list_customers
 from app.services.products import create_product
 from app.services.vendors import create_vendor
@@ -16,6 +17,7 @@ from app.services.milk_collection import record_milk_collection
 from app.services.orders import (
     cancel_order,
     create_order,
+    delete_order,
     deliver_order,
     list_upcoming_advance_orders,
     update_placed_order,
@@ -255,3 +257,69 @@ def test_update_placed_order_rejects_delivered(session, product, customer):
             rate=Decimal("380"),
             delivery_date=date(2026, 7, 20),
         )
+
+
+def test_delete_delivered_order_restores_stock(session, product, customer):
+    order = create_order(
+        session, customer.customer_id, product.product_id, date(2026, 7, 14),
+        Decimal("3"), Decimal("380"),
+    )
+    assert product.current_stock == Decimal("7.0")
+    assert get_customer_balance(session, customer.customer_id) == Decimal("1140.00")
+
+    delete_order(session, order.order_id)
+
+    assert session.get(OrderTransaction, order.order_id) is None
+    assert product.current_stock == Decimal("10.0")
+    assert get_customer_balance(session, customer.customer_id) == Decimal("0")
+
+
+def test_delete_delivered_order_removes_linked_payment(session, product, customer):
+    order = create_order(
+        session, customer.customer_id, product.product_id, date(2026, 7, 14),
+        Decimal("5"), Decimal("380"), advance_received_now=Decimal("500"),
+    )
+    order_id = order.order_id
+    assert get_amount_paid_for_txn(session, order_id, "customer") == Decimal("500")
+
+    delete_order(session, order_id)
+
+    assert get_amount_paid_for_txn(session, order_id, "customer") == Decimal("0")
+    assert get_customer_balance(session, customer.customer_id) == Decimal("0")
+    assert product.current_stock == Decimal("10.0")
+
+
+def test_delete_placed_advance_leaves_stock_unchanged(session, product, customer):
+    order = create_order(
+        session, customer.customer_id, product.product_id, date(2026, 7, 14),
+        Decimal("5"), Decimal("380"),
+        delivery_date=date(2026, 8, 1),
+    )
+    assert product.current_stock == Decimal("10.0")
+    assert get_customer_balance(session, customer.customer_id) == Decimal("1900.00")
+
+    delete_order(session, order.order_id)
+
+    assert session.get(OrderTransaction, order.order_id) is None
+    assert product.current_stock == Decimal("10.0")
+    assert get_customer_balance(session, customer.customer_id) == Decimal("0")
+
+
+def test_delete_cancelled_order(session, product, customer):
+    order = create_order(
+        session, customer.customer_id, product.product_id, date(2026, 7, 14),
+        Decimal("5"), Decimal("380"),
+        delivery_date=date(2026, 8, 1),
+    )
+    cancel_order(session, order.order_id)
+    order_id = order.order_id
+
+    delete_order(session, order_id)
+
+    assert session.get(OrderTransaction, order_id) is None
+    assert product.current_stock == Decimal("10.0")
+
+
+def test_delete_order_unknown_id(session):
+    with pytest.raises(ValueError, match="No such order"):
+        delete_order(session, 99999)

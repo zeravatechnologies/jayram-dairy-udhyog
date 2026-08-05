@@ -33,6 +33,7 @@ from app.ui.theme import (
     make_button,
     set_role,
 )
+from app.utils.activity_log import log_action
 from app.utils.bs_date import to_bs_display
 
 STATUS_COLORS = {"paid": GREEN, "partial": AMBER, "pending": AMBER, "processing": GREEN_DARK}
@@ -223,6 +224,12 @@ class PaymentsScreen(QWidget):
         self.amount_input.clear()
         self.payment_date_input.reset_to_today()
         self.feedback_label.setText("Payment saved successfully.")
+        party_name = self.party_combo.currentText()
+        log_action(
+            self.username,
+            "payment.save",
+            f"{party_type} · {party_name} · रु {amount}",
+        )
         self.refresh_recent()
         if self.on_payment_saved:
             self.on_payment_saved()
@@ -251,6 +258,7 @@ class PaymentsScreen(QWidget):
             QMessageBox.warning(self, "Couldn't update this payment", str(e))
             return
         self.feedback_label.setText("Payment updated successfully.")
+        log_action(self.username, "payment.update", f"{party_name} #{payment.payment_id}")
         self.refresh_recent()
         if self.on_payment_saved:
             self.on_payment_saved()
@@ -270,12 +278,14 @@ class PaymentsScreen(QWidget):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
+        context = f"{party_name} #{payment.payment_id}"
         try:
             delete_payment(self.session, payment.payment_id)
         except ValueError as e:
             QMessageBox.warning(self, "Couldn't delete this payment", str(e))
             return
         self.feedback_label.setText("Payment deleted.")
+        log_action(self.username, "payment.delete", context)
         self.refresh_recent()
         if self.on_payment_saved:
             self.on_payment_saved()

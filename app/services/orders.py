@@ -241,6 +241,30 @@ def cancel_order(session, order_id: int) -> OrderTransaction:
     return order
 
 
+def delete_order(session, order_id: int) -> None:
+    """Permanently remove an order and its linked customer payments.
+
+    Restores finished-goods stock when the order was delivered (stock was
+    taken). Placed and cancelled orders never touched stock.
+    """
+    from app.services.payments import list_payments_for_txn
+
+    order = session.get(OrderTransaction, order_id)
+    if order is None:
+        raise ValueError(f"No such order: {order_id}")
+
+    if order.status == "delivered":
+        product = session.get(Product, order.product_id)
+        if product is None:
+            raise ValueError(f"No such product: {order.product_id}")
+        product.current_stock = Decimal(product.current_stock) + Decimal(order.quantity)
+
+    for payment in list_payments_for_txn(session, order.order_id, party_type="customer"):
+        session.delete(payment)
+    session.delete(order)
+    session.commit()
+
+
 def list_upcoming_advance_orders(session, within_days: int = 30, as_of: date_type | None = None):
     """Placed advance orders with delivery_date from as_of through as_of+within_days."""
     as_of = as_of or today_in_nepal()

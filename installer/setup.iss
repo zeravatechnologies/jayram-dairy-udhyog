@@ -8,7 +8,7 @@
 ; per jayram_dairy.spec (see BUILD.md).
 
 #define MyAppName "Jayram Dairy Udhyog"
-#define MyAppVersion "0.5.1"
+#define MyAppVersion "0.5.4"
 #define MyAppExeName "JayramDairyUdhyog.exe"
 
 [Setup]

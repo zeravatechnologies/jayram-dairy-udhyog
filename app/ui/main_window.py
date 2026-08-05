@@ -1,7 +1,6 @@
 """Main window — sidebar navigation across all screens: Dashboard,
-Vendor, Production, Orders, Payments, Activity Log. Every screen gets
-a bound log_fn so successful actions are recorded with the signed-in
-user's name, per deployment doc Section 7.1.
+Vendor, Production, Orders, Payments, Activity Log. Each screen logs
+successful actions with the signed-in username (deployment doc Section 7.1).
 """
 from functools import partial
 
@@ -64,6 +63,7 @@ class MainWindow(QMainWindow):
         self.vendor_screen.username = self.username
         self.vendor_screen.milk_saved.connect(self.dashboard_screen.refresh)
         self.production_screen = ProductionScreen(self.session)
+        self.production_screen.username = self.username
         self.orders_screen = OrdersScreen(self.session)
         self.orders_screen.username = self.username
         self.orders_screen.orders_changed.connect(self.dashboard_screen.refresh)
@@ -86,7 +86,6 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(container)
         self.content_layout.addWidget(self.stack)
 
-        self._wrap_with_logging()
         self.show_screen("home")
 
     def resizeEvent(self, event):
@@ -101,38 +100,6 @@ class MainWindow(QMainWindow):
             16 if is_narrow else 24,
         )
         super().resizeEvent(event)
-
-    def _wrap_with_logging(self):
-        """Attach logging around each screen's save action, without
-        threading a logger through every service call signature."""
-        self._wrap(self.vendor_screen, "save_entry", "milk_collection.save")
-        self._wrap(self.vendor_screen, "open_edit_milk", "milk_collection.update")
-        self._wrap(self.vendor_screen, "delete_selected_milk", "milk_collection.delete")
-        self._wrap(self.vendor_screen, "open_add_vendor", "vendor.create")
-        self._wrap(self.vendor_screen, "open_edit_vendor", "vendor.update")
-        self._wrap(self.production_screen, "save_batch", "production.save_batch")
-        self._wrap(self.production_screen, "open_add_product", "product.create")
-        self._wrap(self.production_screen, "open_edit_product", "product.update")
-        self._wrap(self.orders_screen, "save_order", "order.save")
-        self._wrap(self.orders_screen, "open_edit_order", "order.update")
-        self._wrap(self.orders_screen, "mark_selected_delivered", "order.deliver")
-        self._wrap(self.orders_screen, "cancel_selected_order", "order.cancel")
-        self._wrap(self.orders_screen, "open_add_customer", "customer.create")
-        self._wrap(self.orders_screen, "open_edit_customer", "customer.update")
-        self._wrap(self.payments_screen, "save_payment", "payment.save")
-        self._wrap(self.payments_screen, "open_edit_payment", "payment.update")
-        self._wrap(self.payments_screen, "delete_selected_payment", "payment.delete")
-
-    def _wrap(self, obj, method_name, action_label):
-        original = getattr(obj, method_name)
-
-        def wrapped(*args, **kwargs):
-            before_error = getattr(obj, "_last_error_shown", None)
-            result = original(*args, **kwargs)
-            log_action(self.username, action_label)
-            return result
-
-        setattr(obj, method_name, wrapped)
 
     def _on_payment_saved(self):
         self.dashboard_screen.refresh()
